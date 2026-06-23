@@ -1,0 +1,591 @@
+﻿import React, { useRef, useState } from 'react';
+//import { Menubar, Dialog } from 'radix-ui';
+import * as Menubar from '@radix-ui/react-menubar';
+import * as Dialog from '@radix-ui/react-dialog';
+import {
+	CheckIcon,
+	ChevronRightIcon,
+	Cross2Icon,
+	DotFilledIcon,
+	GlobeIcon
+} from '@radix-ui/react-icons';
+import './styles.css';
+import { ConfigManager } from '../tools/config_manager';
+import type ToolSystem from '../tools/ToolSystem';
+import i18n from '../tools/i18n';
+import { useTranslation } from "react-i18next";
+
+const CHECK_ITEMS = ['Always Show Bookmarks Bar', 'Always Show Full URLs'];
+
+
+interface FilebarProps {
+	updateImageFiles: (updater: (prev: File[]) => File[]) => void;
+	closeImage: (index: number) => void;
+    clearAllFiles: () => void;
+	configManager: ConfigManager | null;
+	toolSystem: ToolSystem | null;
+	currentAnnotationClass: string;
+	availableModels: Record<string, string>;
+	selectedModels: string[];
+	onModelSelect: (modelNames: string[]) => void;
+	onCustomModelUpload: (file: File) => void;
+	onPreprocess: () => void;
+	onExportAll: () => void;
+	onExportCurrent: () => void;
+}
+
+/**
+ * Filebar component; displays filebar and handles system interaction beyond basic tools.
+ */
+const Filebar: React.FC<FilebarProps> = ({
+	updateImageFiles,
+	closeImage,
+	clearAllFiles,
+	configManager,
+	toolSystem,
+	currentAnnotationClass,
+	availableModels,
+	selectedModels,
+	onModelSelect,
+	onCustomModelUpload,
+	onPreprocess,
+	onExportAll,
+	onExportCurrent,
+}) => {
+
+	//language
+	const { t } = useTranslation("filebar");
+
+	const [checkedSelection, setCheckedSelection] = useState([
+		CHECK_ITEMS[1],
+	]);
+
+	const [isClassesDialogOpen, setIsClassesDialogOpen] = useState(false);
+	const [classItems, setClassItems] = useState<Array<{ id: string, name: string, color: string }>>([]);
+	const [openAbout, setOpenAbout] = useState(false);
+	const [openInstructions, setOpenInstructions] = useState(false);
+	//const { t } = useTranslation(["inspector", "help"]);
+
+	/**
+	 * Select a ONNX model from the list of models,
+	 * @param model Name of ONNX model (stored in App.tsx/availableModels)
+	 */
+	const handleModelCheckboxChange = (model: string) => {
+		if (selectedModels.includes(model)) {
+			onModelSelect(selectedModels.filter(m => m !== model));
+		}
+		else {
+			onModelSelect([...selectedModels, model]);
+		}
+	};
+	
+
+	const handleFilesSelected = (fileList: FileList | null) => {
+		if (!fileList) {
+			updateImageFiles(() => []);
+			return;
+		}
+
+		// Convert to array
+		let files = Array.from(fileList);
+
+		// Filter image types (keep folder structure via webkitRelativePath)
+		files = files.filter(f =>
+			(f.type && f.type.startsWith("image/")) ||
+			/\.(jpe?g|png|gif|bmp|tiff|webp|svg)$/i.test(f.name)
+		);
+
+		if (files.length === 0) {
+			updateImageFiles(() => []);
+			return;
+		}
+
+		// Sort by folder path + file name for consistent ordering
+		files.sort((a, b) => {
+			const pa = a.webkitRelativePath || a.name;
+			const pb = b.webkitRelativePath || b.name;
+			return pa.localeCompare(pb);
+		});
+
+		// Append instead of replacing existing images
+		updateImageFiles((prev) => {
+			const combined = [...prev, ...files];
+
+			const unique = Array.from(
+				new Map(
+					combined.map(f => [(f.webkitRelativePath || f.name) + f.lastModified, f])
+				).values()
+			);
+
+			unique.sort((a, b) => {
+				const pa = a.webkitRelativePath || a.name;
+				const pb = b.webkitRelativePath || b.name;
+				return pa.localeCompare(pb);
+			});
+
+			return unique;
+		});
+	};
+
+	// Update local state when config manager changes
+	React.useEffect(() => {
+		if (configManager) {
+			const configClasses = configManager.getClassNames();
+			const items = Object.entries(configClasses).map(([name, color], index) => ({
+				id: `class-${index}-${Date.now()}`,
+				name,
+				color
+			}));
+			setClassItems(items);
+		}
+	}, [configManager]);
+
+	/**
+	 * Save Config/class values.
+	 */
+	const handleSaveClasses = () => {
+		if (configManager) {
+			// Convert back to config format
+			const configFormat: { [key: string]: string } = {};
+			classItems.forEach(item => {
+				if (item.name.trim()) { // Only save non-empty names
+					configFormat[item.name] = item.color;
+				}
+			});
+
+			configManager.setClassNames(configFormat);
+			configManager.saveToStorage();
+		}
+
+		setIsClassesDialogOpen(false);
+	};
+
+	const handleCancelClasses = () => {
+		if (configManager) {
+			// Reset to saved config
+			const configClasses = configManager.getClassNames();
+			const items = Object.entries(configClasses).map(([name, color], index) => ({
+				id: `class-${index}-${Date.now()}`,
+				name,
+				color
+			}));
+			setClassItems(items);
+		}
+		setIsClassesDialogOpen(false);
+	};
+
+	const updateClassName = (id: string, newName: string) => {
+		setClassItems(items => items.map(item =>
+			item.id === id ? { ...item, name: newName } : item
+		));
+	};
+
+	const updateClassColor = (id: string, newColor: string) => {
+		setClassItems(items => items.map(item =>
+			item.id === id ? { ...item, color: newColor } : item
+		));
+	};
+
+	const deleteClass = (id: string) => {
+		setClassItems(items => items.filter(item => item.id !== id));
+	};
+
+	const addClass = () => {
+		setClassItems(items => [...items, {
+			id: `class-new-${Date.now()}`,
+			name: 'New Class',
+			color: '#FF0000'
+		}]);
+	};
+	React.useEffect(() => {
+	if (Object.keys(availableModels).length > 0 && selectedModels.length === 0) {
+		const firstModel = Object.keys(availableModels)[0];
+		onModelSelect([firstModel]);
+	}
+}, [availableModels]);
+
+	return (
+		<Menubar.Root className='MenubarRoot flex w-full items-center'>
+			
+			{/** FILE */}
+			<Menubar.Menu>
+				<Menubar.Trigger className='MenubarTrigger'>{t("file")}</Menubar.Trigger>
+				<Menubar.Portal>
+					<Menubar.Content
+						className='MenubarContent'
+						align='start'
+						sideOffset={5}
+						alignOffset={-3}
+					>
+						<Menubar.Item
+							className="MenubarItem"
+							onClick={() => document.getElementById("imageInput")?.click()}
+						>
+							{t("open")} <div className="RightSlot">CTRL + O</div>
+						</Menubar.Item>
+
+						<Menubar.Item
+							className="MenubarItem"
+							onClick={() => document.getElementById("folderInput")?.click()}
+						>
+							{t("openFolder")}
+						</Menubar.Item>
+						<Menubar.Separator className='MenubarSeparator' />
+						<Menubar.Item
+							className="MenubarItem"
+							onClick={() => closeImage(toolSystem?.currentImageIndex ?? 0)}
+						>
+							{t("closeFile")}
+						</Menubar.Item>
+						<Menubar.Item
+							className='MenubarItem'
+							    onClick={() => {
+									if (window.confirm(t("confirmClearMessage") || "Are you sure you want to clear all files?")) {
+										clearAllFiles();
+									}
+								}}
+						>
+							{t("clearFiles")}
+						</Menubar.Item>
+						<Menubar.Separator className='MenubarSeparator' />
+						<Menubar.Sub>
+							<Menubar.SubTrigger className='MenubarSubTrigger'>
+								{t("export")}
+								<div className='RightSlot'>
+									<ChevronRightIcon />
+								</div>
+							</Menubar.SubTrigger>
+							<Menubar.Portal>
+								<Menubar.SubContent
+									className='MenubarSubContent'
+									alignOffset={-5}
+								>
+									<Menubar.Item className='MenubarItem'
+										onClick={onExportAll}
+									>
+										{t("exportAll")}
+									</Menubar.Item>
+									<Menubar.Item className='MenubarItem'
+										onClick={onExportCurrent}
+									>
+										{t("exportCurr")}
+									</Menubar.Item>
+								</Menubar.SubContent>
+							</Menubar.Portal>
+						</Menubar.Sub>
+					</Menubar.Content>
+				</Menubar.Portal>
+			</Menubar.Menu>
+			{/** CNN */}
+			{/** MODEL */}
+			<Menubar.Menu>
+				<Menubar.Trigger className='MenubarTrigger'>{t("models")}</Menubar.Trigger>
+				<Menubar.Portal>
+					<Menubar.Content
+						className='MenubarContent'
+						align='start'
+						sideOffset={5}
+						alignOffset={-14}
+					>
+						{Object.keys(availableModels).map(model => (
+							<Menubar.CheckboxItem
+								className='MenubarCheckboxItem inset'
+								key={model}
+								checked={selectedModels.includes(model)}
+								onCheckedChange={() => handleModelCheckboxChange(model)}
+							>
+								<Menubar.ItemIndicator className='MenubarItemIndicator'>
+									<CheckIcon />
+								</Menubar.ItemIndicator>
+								{model}
+							</Menubar.CheckboxItem>
+						))}
+						<Menubar.Separator className='MenubarSeparator' />
+						<Menubar.Item className='MenubarItem inset'
+							onClick={() => {
+								const fileInput = document.getElementById('modelInput') as HTMLInputElement;
+								if (fileInput) {
+									fileInput.click(); // Programmatically trigger the file input
+								}
+							}}
+						>
+							{t("uploadModel")}
+						</Menubar.Item>
+					</Menubar.Content>
+				</Menubar.Portal>
+			</Menubar.Menu>
+			{/** CONFIG */}
+			{/**<Menubar.Menu>
+				<Menubar.Trigger className='MenubarTrigger'>{t("config")}</Menubar.Trigger>
+				<Menubar.Portal>
+					<Menubar.Content
+						className='MenubarContent'
+						align='start'
+						sideOffset={5}
+						alignOffset={-14}
+					>
+						<Menubar.Sub>
+							<Menubar.SubTrigger className='MenubarSubTrigger'>
+								{t("classes")}
+								<div className='RightSlot'>
+									<ChevronRightIcon />
+								</div>
+							</Menubar.SubTrigger>
+							<Menubar.Portal>
+								<Menubar.SubContent
+									className='MenubarSubContent'
+									alignOffset={-5}
+								>
+									<Menubar.RadioGroup
+										value={toolSystem?.getCurrentAnnotationClass()}
+										onValueChange={(value) => toolSystem?.setCurrentAnnotationClass(value)}
+									>
+										{classItems.map((item) => (
+											<Menubar.RadioItem
+												className='MenubarRadioItem inset'
+												key={item.id}
+												value={item.name}
+											>
+												<Menubar.ItemIndicator className='MenubarItemIndicator'>
+													<DotFilledIcon style={{ color: item.color }} />
+												</Menubar.ItemIndicator>
+												{item.name}
+											</Menubar.RadioItem>
+										))}
+									</Menubar.RadioGroup>
+									<Menubar.Separator className='MenubarSeparator' />
+									<Menubar.Item
+										className='MenubarItem'
+										onClick={() => setIsClassesDialogOpen(true)}
+									>
+										{t("editClasses")}
+									</Menubar.Item>
+								</Menubar.SubContent>
+							</Menubar.Portal>
+						</Menubar.Sub>
+					</Menubar.Content>
+				</Menubar.Portal>
+			</Menubar.Menu>*/}
+			{/** Help */}
+			<Menubar.Menu>
+				<Menubar.Trigger className='MenubarTrigger'>{t("help")}</Menubar.Trigger>
+
+				<Menubar.Portal>
+					<Menubar.Content
+						className='MenubarContent'
+						align='start'
+						sideOffset={5}
+						alignOffset={-14}
+					>
+
+						{/* ABOUT DIALOG: controlled approach */}
+						<Dialog.Root open={openAbout} onOpenChange={setOpenAbout}>
+							{/* Menubar item — use onSelect to intercept selection and open dialog */}
+							<Menubar.Item
+								className='MenubarItem inset'
+								onSelect={(e: Event) => {
+									e.preventDefault();        // prevent the menubar from auto-closing
+									setOpenAbout(true);        // open the dialog
+								}}
+							>
+								{t("about")}
+							</Menubar.Item>
+
+							{/* Dialog content (no trigger) */}
+							<Dialog.Portal>
+								<Dialog.Overlay className="DialogOverlay" />
+								<Dialog.Content className="DialogContent">
+									<Dialog.Title className="DialogTitle">
+										{t("about")}
+									</Dialog.Title>
+									<Dialog.Description className="DialogDescription">
+										{t("aboutText")
+											.split("\n\n")
+											.map((para, i) => (
+												<p key={i} style={{ marginBottom: "1rem" }}>
+													{para}
+												</p>
+											))}
+									</Dialog.Description>
+
+									<Dialog.Close asChild>
+										<button className="DialogCloseButton">{t("close")}</button>
+									</Dialog.Close>
+								</Dialog.Content>
+							</Dialog.Portal>
+						</Dialog.Root>
+
+
+						{/* INSTRUCTIONS DIALOG */}
+						<Dialog.Root open={openInstructions} onOpenChange={setOpenInstructions}>
+							<Menubar.Item
+								className='MenubarItem inset'
+								onSelect={(e: Event) => {
+									e.preventDefault();
+									setOpenInstructions(true);
+								}}
+							>
+								{t("instructions")}
+							</Menubar.Item>
+
+							<Dialog.Portal>
+								<Dialog.Overlay className="DialogOverlay" />
+								<Dialog.Content className="DialogContent">
+									<Dialog.Title className="DialogTitle">{t("instructions")}</Dialog.Title>
+									<Dialog.Description className="DialogDescription"> {t("instructionsText")
+										.split("\n\n")
+										.map((para, i) => (
+											<p key={i} style={{ marginBottom: "1rem" }}>
+												{para}
+											</p>
+										))}</Dialog.Description>
+									<Dialog.Close asChild>
+										<button className="DialogCloseButton">{t("close")}</button>
+									</Dialog.Close>
+								</Dialog.Content>
+							</Dialog.Portal>
+						</Dialog.Root>
+
+
+					</Menubar.Content>
+				</Menubar.Portal>
+			</Menubar.Menu>
+
+
+			{/** PREPROCESS */}
+			<button
+					className="MenubarButton"
+					onClick={onPreprocess}
+				>
+				{t("preprocess")}
+			</button>
+			<div className='ml-auto flex items-center gap-2 mr-4'>
+
+				{/** Language Dropdown */}
+				<Menubar.Menu>
+					<Menubar.Trigger className='MenubarTrigger flex items-center gap-2'>
+						<GlobeIcon style={{ fontSize: 18 }} />
+						{t("language")}
+					</Menubar.Trigger>
+					<Menubar.Portal>
+						<Menubar.Content
+							className='MenubarContent w-56'
+							align='start'
+							sideOffset={5}
+							alignOffset={-14}
+						>
+							<Menubar.Item
+								className='MenubarItem'
+								onClick={() => i18n.changeLanguage("en")}
+							>
+								English
+							</Menubar.Item>
+
+							<Menubar.Item
+								className='MenubarItem'
+								onClick={() => i18n.changeLanguage("ja")}
+							>
+								日本語
+							</Menubar.Item>
+						</Menubar.Content>
+					</Menubar.Portal>
+				</Menubar.Menu>
+			</div>
+
+			{/* Dialog for Editing Classes */}
+			<Dialog.Root open={isClassesDialogOpen} onOpenChange={setIsClassesDialogOpen}>
+				<Dialog.Portal>
+					<Dialog.Overlay className='DialogOverlay' />
+					<Dialog.Content className='DialogContent'>
+						<Dialog.Title className='DialogTitle'>Configure Classes</Dialog.Title>
+						<Dialog.Description className='DialogDescription'>
+							Manage your class names configuration.
+						</Dialog.Description>
+						<div className='ClassesList'>
+							{classItems.map((item) => (
+								<div key={item.id} className='ClassItem'>
+									<input
+										type='text'
+										value={item.name}
+										onChange={(e) => updateClassName(item.id, e.target.value)}
+										className='ClassInput'
+										placeholder='Class name'
+									/>
+									<input
+										type='color'
+										value={item.color}
+										onChange={(e) => updateClassColor(item.id, e.target.value)}
+										className='ColorInput'
+									/>
+								</div>
+							))}
+						</div>
+						<div className='DialogActions'>
+							<Dialog.Close asChild>
+								<button className='Button green' onClick={handleSaveClasses}>{t("save")}</button>
+							</Dialog.Close>
+							<Dialog.Close asChild>
+								<button className='Button gray' onClick={handleCancelClasses}>{t("cancel")}</button>
+							</Dialog.Close>
+						</div>
+
+						<Dialog.Close asChild>
+							<button className='IconButton' aria-label='Close'>
+								<Cross2Icon />
+							</button>
+						</Dialog.Close>
+					</Dialog.Content>
+				</Dialog.Portal>
+			</Dialog.Root>
+			{/* Select individual image files */}
+            <input
+                id="imageInput"
+                type="file"
+                multiple
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+					// Handle file selection cancellation
+					if(!e.currentTarget.files || e.currentTarget.files.length === 0) {
+						console.log("File selection cancelled");
+						return;
+					}
+					console.log("Files selected:", e.currentTarget.files);
+					handleFilesSelected(e.currentTarget.files);
+					e.currentTarget.value = "";
+				}}
+            />
+
+			{/* Select folders */}
+			<input
+				id="folderInput"
+				type="file"
+				multiple
+				style={{ display: "none" }}
+				onChange={(e) => {
+					if(!e.currentTarget.files || e.currentTarget.files.length === 0) {
+						console.log("File selection cancelled");
+						return;
+					}
+					console.log("Files selected:", e.currentTarget.files);
+					handleFilesSelected(e.currentTarget.files);
+					e.currentTarget.value = "";
+				}}
+				{...{ webkitdirectory: "", directory: "" }}
+			/>
+			<input
+				id='modelInput'
+				type='file'
+				accept='.onnx'
+				style={{ display: 'none' }}
+				onChange={e => {
+					if (e.target.files && e.target.files[0]) {
+						onCustomModelUpload(e.target.files[0]);
+					}
+				}}
+			/>
+		</Menubar.Root>
+	);
+};
+
+export default Filebar;
