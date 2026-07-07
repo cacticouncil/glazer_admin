@@ -140,13 +140,13 @@ npm run preview
 yarn preview
 ```
 
-## 📦 Usage with Docker
+## 📦 Usage with Podman
 
 ```bash
-docker build -t ceramnote .
-docker run -d --name ceramnote-container -p 80:80 ceramnote
+podman build -t glazer-admin .
+podman run -d --name glazer-admin -p 80:80 glazer-admin
 ```
-ceramnote will run on port 80. Visit https://localhost:80 to start annotating.
+Glazer will run on port 80. Visit http://localhost to start annotating.
 
 ---
 
