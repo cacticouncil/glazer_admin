@@ -644,11 +644,11 @@ function App() {
 				throw new Error(`HTTP error! Status: ${response.status}`);
 			}
 
-			// const a = document.createElement('a');
-			// a.href = zipUrl;
-			// a.download = 'annotations.zip';
-			// a.click();
-			// URL.revokeObjectURL(zipUrl);
+			const a = document.createElement('a');
+			a.href = zipUrl;
+			a.download = 'annotations.zip';
+			a.click();
+			URL.revokeObjectURL(zipUrl);
 
 			setCurrentExportStep(t('export.complete'));
 		}
