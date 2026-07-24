@@ -1,0 +1,95 @@
+{
+  "common": {
+    "tool": {
+      "selector": "選択",
+      "pan": "移動",
+      "rectangle": "四角形",
+      "delete": "選択中のアノテーションを削除"
+    }
+  },
+  "filebar": {
+    "file": "ファイル",
+    "open": "開く",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "confirmClearMessage": "本当にすべてのファイルをクリアしますか。",
+    "openFolder": "フォルダを開く",
+    "closeFile": "現在のファイルを閉じる",
+    "clearFiles": "すべてのファイルをクリア",
+    "export": "エクスポート",
+    "exportAll": "すべてエクスポート",
+    "exportCurr": "現在の画像をエクスポート",
+    "models": "モデル",
+    "uploadModel": "モデルをアップロード",
+    "config": "設定",
+    "classes": "クラス",
+    "editClasses": "クラスを編集…",
+    "preprocess": "前処理",
+    "preprocessAll": "すべてを前処理",
+    "language": "言語",
+    "help": "ヘルプ",
+    "about": "このアプリについて",
+    "aboutText": "このアプリケーションは、オブジェクトに注釈を付けたり、動的に確認したりすることができます。\n\nKITC 著作者：フロリダ大学の学生。\n\n2025年秋 貢献者：Ethan Mitchell、Megan Mendez、Santiago Roa、Mia Camacho",
+    "instructions": "操作説明",
+    "instructionsText": "ツールバーを使用してアノテーションを作成できます。アノテーションをクリックすると、そのプロパティを編集できます。「ファイル」ドロップダウンでは画像の読み込み、クリア、エクスポートが行えます。\n\n「モデル」には画像処理用のAIモデルが含まれています。「前処理」ボタンを押すと、選択された画像のすべてのタイルを処理します。\n\n移動ツール：画像を移動したり、拡大縮小したりできます。\n\n選択ツール：アノテーションや画面上の項目を選択します。\n\n四角形ツール：手動で新しいアノテーションを作成します。",
+    "close": "閉じる"
+  },
+  "inspector": {
+    "inspector": "インスペクター",
+    "noAnnotationDataMsg": "アノテーションデータがありません",
+    "annotationEditMsg": "このアノテーションには編集できるプロパティがありません",
+    "multiAnnotationMsg": "複数のアノテーションが選択されています",
+    "singleAnnotationMsg": "1つのアノテーションを選択してプロパティを編集してください",
+    "noAnnotationSelMsg": "アノテーションが選択されていません",
+    "selectAnnotationMsg": "アノテーションを選択してプロパティを表示・編集してください",
+    "color_data_title": "色データ",
+    "color_data": {
+      "ColorName": "色名",
+      "ColorL": "L値",
+      "ColorA": "A値",
+      "ColorB": "B値"
+    },
+    "tile_data_title": "タイルデータ",
+    "tile_data": {
+      "GlazeType": "釉薬タイプ",
+      "FiringTemperature": "焼成温度",
+      "ChemicalComposition": "化学組成",
+      "FiringType": "焼成タイプ",
+      "SoilType": "土の種類",
+      "SurfaceCondition": "表面状態"
+    },
+    "bounds_title": "境界",
+    "bounds": {
+      "x": "X",
+      "y": "Y",
+      "w": "幅",
+      "h": "高さ"
+    }
+  },
+  "scrollbar": {
+    "noImage": "画像が読み込まれていません",
+    "uploadImage": "ナビゲーションを表示するには画像をアップロードしてください",
+    "images": "画像",
+    "annotation": "アノテーション"
+  },
+  "loadBar": {
+    "title": "アノテーションをエクスポート中",
+    "processing": "{count} 件のアノテーションを処理してエクスポートパッケージを生成しています…",
+    "complete": "完了",
+    "of": "／",
+    "currentStep": "{step}",
+    "subStep": "処理中: {sub}"
+  },
+  "app": {
+    "export": {
+      "preparing": "エクスポートを準備中…",
+      "loadingImage": "画像 {current} ／ {total} を読み込み中…",
+      "processing": "画像 {current} ／ {total} を処理中（{count} 個のアノテーション）",
+      "complete": "エクスポート完了！",
+      "failed": "エクスポートに失敗しました"
+    },
+    "process": {
+      "image": "画像 {current} ／ {total} を処理中"
+    }
+  }
+}

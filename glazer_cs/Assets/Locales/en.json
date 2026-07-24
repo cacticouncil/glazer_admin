@@ -1,0 +1,95 @@
+{
+  "common": {
+    "tool": {
+      "selector": "Select",
+      "pan": "Pan",
+      "rectangle": "Rectangle",
+      "delete": "Delete selected annotations"
+    }
+  },
+  "filebar": {
+    "file": "File",
+    "open": "Open",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirmClearMessage": "Are you sure you want to clear all files?",
+    "openFolder": "Open Folder",
+    "closeFile": "Close Current File",
+    "clearFiles": "Clear All Files",
+    "export": "Export",
+    "exportAll": "Export All",
+    "exportCurr": "Export Current",
+    "models": "Models",
+    "uploadModel": "Upload Model",
+    "config": "Config",
+    "classes": "Classes",
+    "editClasses": "Edit Classes...",
+    "preprocess": "Preprocess",
+    "preprocessAll": "Preprocess All",
+    "language": "Language",
+    "help": "Help",
+    "about": "About",
+    "aboutText": "This application allows you to annotate and inspect objects dynamically.\n\nWritten by: University of Florida Students.\n\nFall 2025 Contributors: Ethan Mitchell, Megan Mendez, Santiago Roa, Mia Camacho",
+    "instructions": "Instructions",
+    "instructionsText": "Use the toolbar to create annotations. Click an annotation to edit its properties. 'File' dropdown will allow you to load images, clear images, and export.\n\nModels holds the AI models for image processing. 'Preprocess' button will process all tiles on the selected image.\n\nPan Tool: allows you to move the image around and zoom.\n\nSelector Tool: selects annotations and other items on screen.\n\nRectangle Tool: creates new annotations by hand.",
+    "close": "Close"
+  },
+  "inspector": {
+    "inspector": "Inspector",
+    "noAnnotationDataMsg": "No annotation data available",
+    "annotationEditMsg": "This annotation may not have editable properties",
+    "multiAnnotationMsg": "Multiple annotations selected",
+    "singleAnnotationMsg": "Select a single annotation to edit properties",
+    "noAnnotationSelMsg": "No annotations selected",
+    "selectAnnotationMsg": "Select an annotation to view and edit its properties",
+    "color_data_title": "Color Data",
+    "color_data": {
+      "ColorName": "Color Name",
+      "ColorL": "ColorL",
+      "ColorA": "ColorA",
+      "ColorB": "ColorB"
+    },
+    "tile_data_title": "Tile Data",
+    "tile_data": {
+      "GlazeType": "Glaze Type",
+      "FiringTemperature": "Firing Temperature",
+      "ChemicalComposition": "Chemical Composition",
+      "FiringType": "Firing Type",
+      "SoilType": "Soil Type",
+      "SurfaceCondition": "Surface Condition"
+    },
+    "bounds_title": "Bounds",
+    "bounds": {
+      "x": "X",
+      "y": "Y",
+      "w": "Width",
+      "h": "Height"
+    }
+  },
+  "scrollbar": {
+    "noImage": "No images loaded",
+    "uploadImage": "Upload images to see navigation",
+    "images": "Images",
+    "annotation": "annotation"
+  },
+  "loadBar": {
+    "title": "Exporting Annotations",
+    "processing": "Processing {count} annotations and generating export package...",
+    "complete": "Complete",
+    "of": "of",
+    "currentStep": "{step}",
+    "subStep": "Processing: {sub}"
+  },
+  "app": {
+    "export": {
+      "preparing": "Preparing export...",
+      "loadingImage": "Loading image {current} of {total}...",
+      "processing": "Processing image {current} of {total} ({count} annotations)",
+      "complete": "Export complete!",
+      "failed": "Export failed"
+    },
+    "process": {
+      "image": "Process image {current} of {total}"
+    }
+  }
+}

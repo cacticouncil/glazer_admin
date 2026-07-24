@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svc="using:GlazerAdmin.Services"
+        x:Class="GlazerAdmin.Views.TextDialog"
+        Width="480" SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <StackPanel Margin="20" Spacing="16">
+        <TextBlock x:Name="BodyText" TextWrapping="Wrap" FontSize="13" />
+        <Button Content="{svc:Localize filebar.close}"
+                HorizontalAlignment="Right"
+                Click="OnCloseClick" />
+    </StackPanel>
+</Window>

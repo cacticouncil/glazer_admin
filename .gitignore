@@ -1,2 +1,21 @@
+## .NET / Avalonia
+bin/
+obj/
+*.user
+
+## IDE
+.vs/
+.vscode/
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets — never commit credentials
+*.env
+secret.*
+
+## node cache (for old version)
 /node_modules/
-/secret.env
+
