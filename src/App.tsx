@@ -17,8 +17,56 @@ import { FastAverageColor, type FastAverageColorResult } from 'fast-average-colo
 import rgbToLab from '@fantasy-color/rgb-to-lab';
 import JSZip from 'jszip';
 import { LoadingBar } from './components/LoadingBar';
-import i18n from './tools/i18n';
 import { useTranslation } from "react-i18next";
+
+const GLAZE_DAEMON_URL = (
+	(import.meta.env.VITE_GLAZE_DAEMON_URL as string | undefined) ?? "http://localhost:8000"
+).replace(/\/+$/, "");
+
+type UploadResponse = {
+	status?: string;
+	message?: string;
+	detail?: string;
+	imported?: number;
+	warnings?: string[];
+};
+
+const loadImageFile = async (file: File) => {
+	const objectUrl = URL.createObjectURL(file);
+	try {
+		return await new Promise<HTMLImageElement>((resolve, reject) => {
+			const loadedImage = new Image();
+			loadedImage.onload = () => resolve(loadedImage);
+			loadedImage.onerror = () => reject(new Error(`Could not load image: ${file.name}`));
+			loadedImage.src = objectUrl;
+		});
+	} finally {
+		URL.revokeObjectURL(objectUrl);
+	}
+};
+
+const downloadBlob = (blob: Blob, filename: string) => {
+	const objectUrl = URL.createObjectURL(blob);
+	const anchor = document.createElement('a');
+	try {
+		anchor.href = objectUrl;
+		anchor.download = filename;
+		anchor.style.display = 'none';
+		document.body.appendChild(anchor);
+		anchor.click();
+	} finally {
+		anchor.remove();
+		URL.revokeObjectURL(objectUrl);
+	}
+};
+
+const sanitizeArchiveName = (value: string) => Array.from(value)
+	.map(character => {
+		const code = character.charCodeAt(0);
+		return code < 32 || '\\/:*?"<>|'.includes(character) ? "_" : character;
+	})
+	.join("")
+	.trim();
 
 /**
  * App component; base rendering point, handles cross-component state. 
@@ -56,10 +104,10 @@ function App() {
 	const [currentExportSubStep, setCurrentExportSubStep] = useState('');
 
 	// Misc
-	const [panelSize, setPanelSize] = useState(80);
+	const [, setPanelSize] = useState(80);
 	const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
 	const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
-	const [currentTool, setCurrentTool] = useState<ToolBase | null>(null);
+	const [, setCurrentTool] = useState<ToolBase | null>(null);
 	const [canvasKey, setCanvasKey] = useState(0);
 
 	// Refs
@@ -220,7 +268,7 @@ function App() {
 				delete clone[index];
 
 				// shift annotation indices down by 1 after the removed file
-				const shifted: any = {};
+					const shifted: { [imageIndex: number]: { [id: string]: Annotation } } = {};
 				const keys = Object.keys(clone).map(Number).sort((a,b)=>a-b);
 				let shift = 0;
 				for (const k of keys) {
@@ -242,7 +290,7 @@ function App() {
 	};
 
 	const runModelsOnImage = useCallback(async (img: HTMLImageElement) => {
-		let newAnnotations: { [id: string]: Annotation } = {};
+			const newAnnotations: { [id: string]: Annotation } = {};
 
 		for (const modelName of selectedModels) {
 			const model = loadedModels[modelName];
@@ -411,13 +459,13 @@ function App() {
 			}
 		};
 
-		document.addEventListener('keydown', handleGlobalKeyDown as any);
-		document.addEventListener('keyup', handleGlobalKeyUp as any);
+			document.addEventListener('keydown', handleGlobalKeyDown);
+			document.addEventListener('keyup', handleGlobalKeyUp);
 
 		// Cleanup event listeners on unmount
 		return () => {
-			document.removeEventListener('keydown', handleGlobalKeyDown as any);
-			document.removeEventListener('keyup', handleGlobalKeyUp as any);
+				document.removeEventListener('keydown', handleGlobalKeyDown);
+				document.removeEventListener('keyup', handleGlobalKeyUp);
 		};
 	}, [imageFiles, currentImageIndex, isImageTransitioning, handlePreprocessors, toolSystem]);
 
@@ -479,7 +527,7 @@ function App() {
 	*/
 
 	const exportAnnotations = async (onlyCurrent: boolean) => {
-		if (!imageFiles.length) return;
+		if (!imageFiles.length || isExporting) return;
 
 		setIsExporting(true);
 		setCurrentExportIndex(0);
@@ -487,48 +535,56 @@ function App() {
 		setCurrentExportSubStep('');
 
 		try {
-			// Create new zip folder to store all data
 			const zip = new JSZip();
-
-			// Get current index starting point 
-			const iterations = onlyCurrent ? 1 : imageFiles.length;
-			const startIndex = onlyCurrent ? currentImageIndex : 0;
-
-			// Calculate information for export loading bar
-			let totalSteps = 0;
-			for (let i = startIndex; i < (onlyCurrent ? startIndex + 1 : iterations); i++) {
-				totalSteps += Object.keys(annotations[i] || {}).length;
-			}
+			const imageIndices = onlyCurrent
+				? [currentImageIndex]
+				: imageFiles.map((_, index) => index);
+			const totalSteps = imageIndices.reduce(
+				(total, index) => total + Object.keys(annotations[index] || {}).length,
+				0
+			);
 
 			setTotalExportSteps(totalSteps);
+			if (totalSteps === 0) {
+				throw new Error("There are no tile annotations to export.");
+			}
+
 			let currentStepIndex = 0;
+			let exportedAnnotationCount = 0;
+			const failedAnnotations: string[] = [];
 
-			for (let i = startIndex; i < (onlyCurrent ? startIndex + 1 : iterations); i++) {
-				// Get the original image name (without extension)
+			for (const i of imageIndices) {
 				const file = imageFiles[i];
-				const imageName = file.name.replace(/\.[^/.]+$/, "");
-				// Create a folder for this image
-				const imageFolder = zip.folder(imageName);
-				const imagesFolder = imageFolder?.folder('images');
-				const annotationsData: { annotation: any; imageUrl: string }[] = [];
-
-				// Store the original image in the folder
-				const originalExt = file.name.split('.').pop() || 'jpg';
-				imageFolder?.file(`${imageName}.${originalExt}`, file);
-
-				// Load the image for this iteration if it's not the current one
-				let imageToProcess = image;
-				if (!onlyCurrent && i !== currentImageIndex) {
-					setCurrentExportStep(t("export.loadingImage", { current: i + 1, total: imageFiles.length }));
-					imageToProcess = await new Promise<HTMLImageElement>((resolve, reject) => {
-						const tempImg = new Image();
-						tempImg.onload = () => resolve(tempImg);
-						tempImg.onerror = reject;
-						tempImg.src = URL.createObjectURL(imageFiles[i]);
-					});
+				if (!file) {
+					throw new Error(`Image ${i + 1} is no longer available.`);
 				}
 
-				if (!imageToProcess) continue;
+				const imageName = file.name.replace(/\.[^/.]+$/, "");
+				const safeImageName = sanitizeArchiveName(imageName) || `image-${i + 1}`;
+				const folderName = `${String(i + 1).padStart(3, "0")}-${safeImageName}`;
+				const imageFolder = zip.folder(folderName);
+				const imagesFolder = imageFolder?.folder('images');
+				const annotationsData: {
+					annotation: Record<string, string | number>;
+					imageUrl: string;
+				}[] = [];
+				if (!imageFolder || !imagesFolder) {
+					throw new Error(`Could not create the export folder for ${file.name}.`);
+				}
+
+				const originalExt = (file.name.split('.').pop() || 'jpg')
+					.replace(/[^a-zA-Z0-9]/g, "") || "jpg";
+				imageFolder.file(`${safeImageName}.${originalExt}`, file);
+
+				let imageToProcess = (
+					i === currentImageIndex &&
+					image?.complete &&
+					image.naturalWidth > 0
+				) ? image : null;
+				if (!imageToProcess) {
+					setCurrentExportStep(t("export.loadingImage", { current: i + 1, total: imageFiles.length }));
+					imageToProcess = await loadImageFile(file);
+				}
 
 				const annots = Object.values(annotations[i] || []);
 				setCurrentExportStep(t("process.image", { current: i + 1, total: imageFiles.length }));
@@ -538,130 +594,158 @@ function App() {
 					setCurrentExportIndex(currentStepIndex);
 					setCurrentExportSubStep(annotation.id);
 
-					// TODO: Move save function to the object itself ?
-					if (annotation.bounds && annotation.bounds.length === 2) {
-						const [start, end] = annotation.bounds;
-
-						// Calculate crop dimensions
-						const x = Math.min(start.x, end.x);
-						const y = Math.min(start.y, end.y);
-						const width = Math.abs(end.x - start.x);
-						const height = Math.abs(end.y - start.y);
-
-						// Create a temporary canvas for the crop
-						const cropCanvas = document.createElement('canvas');
-						cropCanvas.width = width;
-						cropCanvas.height = height;
-
-						const cropContext = cropCanvas.getContext('2d');
-						if (!cropContext) continue;
-
-						// Draw the cropped image onto temp canvas
-						cropContext.drawImage(imageToProcess, x, y, width, height, 0, 0, width, height);
-
-						// Get cropped image URL
-						// NOTE: blob MIME type MUST match original image MIME type, or size is MASSIVELY inflated (~5x)
-						// TODO: track MIME type of original image so multiple filetypes are supported
-						const blob = await new Promise<Blob | null>((resolve) => cropCanvas.toBlob(resolve, 'image/jpeg', 0.95));
-						if (blob) {
-							const fileName = `${annotation.id}.jpg`;
-							imagesFolder?.file(fileName, blob);
-
-							const url = URL.createObjectURL(blob);
-							const fac = new FastAverageColor();
-
-							try {
-								// Load the cropped image into an <img>
-								const imgForColor = new window.Image();
-								imgForColor.src = url;
-								await new Promise(resolve => { imgForColor.onload = resolve; });
-
-								// Create a temp canvas for color calculation (smaller area)
-								const marginRatio = 0.25; // 15% margin on each side
-								const cropW = imgForColor.width;
-								const cropH = imgForColor.height;
-								const marginX = cropW * marginRatio;
-								const marginY = cropH * marginRatio;
-								const colorW = cropW - 2 * marginX;
-								const colorH = cropH - 2 * marginY;
-
-								const colorCanvas = document.createElement('canvas');
-								colorCanvas.width = colorW;
-								colorCanvas.height = colorH;
-								const colorContext = colorCanvas.getContext('2d');
-								colorContext?.drawImage(
-									imgForColor,
-									marginX, marginY, colorW, colorH, // source rect
-									0, 0, colorW, colorH              // dest rect
-								);
-
-								// Now calculate color from the smaller region
-								const color: FastAverageColorResult = await fac.getColorAsync(colorCanvas, { algorithm: 'simple' });
-								const color_string = color.rgb.split(/[,()]/);
-								const red = parseFloat(color_string[1]);
-								const green = parseFloat(color_string[2]);
-								const blue = parseFloat(color_string[3]);
-								const lab = rgbToLab({ red, green, blue });
-								annotation.color_data.ColorL = lab.luminance;
-								annotation.color_data.ColorA = lab.a;
-								annotation.color_data.ColorB = lab.b;
-							} catch (error) {
-								console.error('Error calculating color:', error);
-							}
-
-							URL.revokeObjectURL(url);
-
-							// Add annotation data to JSON
-							annotationsData.push({
-								annotation: annotation.getData(),
-								imageUrl: `images/${fileName}`
-							});
-						}
+					if (!annotation.bounds || annotation.bounds.length !== 2) {
+						failedAnnotations.push(annotation.id);
+						continue;
 					}
+
+					const [start, end] = annotation.bounds;
+					const coordinates = [start.x, start.y, end.x, end.y];
+					if (!coordinates.every(Number.isFinite)) {
+						failedAnnotations.push(annotation.id);
+						continue;
+					}
+
+					const sourceWidth = imageToProcess.naturalWidth || imageToProcess.width;
+					const sourceHeight = imageToProcess.naturalHeight || imageToProcess.height;
+					const left = Math.max(0, Math.min(start.x, end.x));
+					const top = Math.max(0, Math.min(start.y, end.y));
+					const right = Math.min(sourceWidth, Math.max(start.x, end.x));
+					const bottom = Math.min(sourceHeight, Math.max(start.y, end.y));
+					const x = Math.floor(left);
+					const y = Math.floor(top);
+					const width = Math.ceil(right) - x;
+					const height = Math.ceil(bottom) - y;
+
+					if (width <= 0 || height <= 0) {
+						failedAnnotations.push(annotation.id);
+						continue;
+					}
+
+					const cropCanvas = document.createElement('canvas');
+					cropCanvas.width = width;
+					cropCanvas.height = height;
+					const cropContext = cropCanvas.getContext('2d');
+					if (!cropContext) {
+						failedAnnotations.push(annotation.id);
+						continue;
+					}
+
+					cropContext.drawImage(
+						imageToProcess,
+						x, y, width, height,
+						0, 0, width, height
+					);
+
+					const blob = await new Promise<Blob | null>(
+						resolve => cropCanvas.toBlob(resolve, 'image/jpeg', 0.95)
+					);
+					if (!blob) {
+						failedAnnotations.push(annotation.id);
+						continue;
+					}
+
+					const fileName = `${annotation.id}.jpg`;
+					imagesFolder.file(fileName, blob);
+
+					try {
+						const marginRatio = 0.25;
+						const marginX = Math.floor(width * marginRatio);
+						const marginY = Math.floor(height * marginRatio);
+						const colorW = Math.max(1, width - 2 * marginX);
+						const colorH = Math.max(1, height - 2 * marginY);
+						const colorCanvas = document.createElement('canvas');
+						colorCanvas.width = colorW;
+						colorCanvas.height = colorH;
+						const colorContext = colorCanvas.getContext('2d');
+						if (colorContext) {
+							colorContext.drawImage(
+								cropCanvas,
+								marginX, marginY, colorW, colorH,
+								0, 0, colorW, colorH
+							);
+							const fac = new FastAverageColor();
+							const color: FastAverageColorResult = await fac.getColorAsync(
+								colorCanvas,
+								{ algorithm: 'simple' }
+							);
+							const colorValues = color.rgb.split(/[,()]/);
+							const red = parseFloat(colorValues[1]);
+							const green = parseFloat(colorValues[2]);
+							const blue = parseFloat(colorValues[3]);
+							const lab = rgbToLab({ red, green, blue });
+							annotation.color_data.ColorL = lab.luminance;
+							annotation.color_data.ColorA = lab.a;
+							annotation.color_data.ColorB = lab.b;
+						}
+					} catch (error) {
+						console.error('Error calculating color:', error);
+					}
+
+					annotationsData.push({
+						annotation: annotation.getData(),
+						imageUrl: `images/${fileName}`
+					});
+					exportedAnnotationCount++;
 				}
 
-				// Add the JSON file to the image's folder
-				imageFolder?.file('annotations.json', JSON.stringify(annotationsData, null, 2));
+				imageFolder.file('annotations.json', JSON.stringify(annotationsData, null, 2));
 			}
 
-			// setCurrentExportStep('Generating ZIP file...');
-			//setCurrentExportSubStep('');
-
-			// Generate the ZIP file and trigger download
+			if (failedAnnotations.length > 0) {
+				throw new Error(
+					`Could not crop ${failedAnnotations.length} annotation(s): ${failedAnnotations.slice(0, 3).join(", ")}`
+				);
+			}
+			if (exportedAnnotationCount !== totalSteps) {
+				throw new Error(
+					`Prepared ${exportedAnnotationCount} of ${totalSteps} tile annotations.`
+				);
+			}
 
 			const zipBlob = await zip.generateAsync({ type: 'blob' });
-			const zipUrl = URL.createObjectURL(zipBlob);
-
 			const formData = new FormData();
 			formData.append('file', zipBlob, 'annotations.zip');
 
-			const response = await fetch("http://localhost:8000/upload", {
+			const response = await fetch(`${GLAZE_DAEMON_URL}/upload`, {
 				method: "POST",
 				body: formData,
 			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP error! Status: ${response.status}`);
+			const responseText = await response.text();
+			let result: UploadResponse = {};
+			try {
+				result = responseText ? JSON.parse(responseText) : {};
+			} catch {
+				throw new Error(
+					`The tile service returned an invalid response (HTTP ${response.status}).`
+				);
 			}
 
-			// const a = document.createElement('a');
-			// a.href = zipUrl;
-			// a.download = 'annotations.zip';
-			// a.click();
-			// URL.revokeObjectURL(zipUrl);
+			if (!response.ok || result.status !== "success") {
+				throw new Error(
+					result.detail ||
+					result.message ||
+					`The tile service rejected the export (HTTP ${response.status}).`
+				);
+			}
+			if (result.imported !== exportedAnnotationCount) {
+				throw new Error(
+					`The tile service imported ${result.imported ?? 0} of ${exportedAnnotationCount} tiles.`
+				);
+			}
+			if (result.warnings?.length) {
+				console.warn("Export completed with warnings:", result.warnings);
+			}
 
+			downloadBlob(zipBlob, 'annotations.zip');
 			setCurrentExportStep(t('export.complete'));
 		}
-		catch (error: any) {
-			if (error instanceof TypeError && error.message === 'NetworkError when attempting to fetch resource.') {
-				// Ignore CORS error
-				console.warn('CORS error ignored:', error);
-				setCurrentExportStep(t('export.complete'));
-			} 
-			else {
-				console.error('Export failed:', error);
-				setCurrentExportStep(t('export.failed'));
-			}
+		catch (error: unknown) {
+			console.error('Export failed:', error);
+			setCurrentExportStep(t('export.failed'));
+			setCurrentExportSubStep(
+				error instanceof Error ? error.message : "Unknown export error"
+			);
 		}
 		finally {
 			// Hide LoadingBar after export completes

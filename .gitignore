@@ -18,4 +18,4 @@ secret.*
 
 ## node cache (for old version)
 /node_modules/
-
+/dist/
